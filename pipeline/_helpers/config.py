@@ -79,19 +79,36 @@ def _filter(cls, d):
     return {k: v for k, v in d.items() if k in known}
 
 
+STRATEGIES = ("default", "mcmc")
+MATCHERS = ("exhaustive", "seq", "pairs", "rig")
+
+
+def _check(name, val, choices):
+    if val not in choices:
+        raise ValueError(f"{name}='{val}' 无效; 可选: {list(choices)}")
+
+
 def load_run(path) -> RunConfig:
     d = yaml.safe_load(Path(path).read_text()) or {}
     p = Params(**_filter(Params, d.pop("params", {}) or {}))
-    return RunConfig(**_filter(RunConfig, d), params=p)
+    cfg = RunConfig(**_filter(RunConfig, d), params=p)
+    _check("strategy", cfg.params.strategy, STRATEGIES)
+    return cfg
 
 
 def load_grid(path) -> GridConfig:
     d = yaml.safe_load(Path(path).read_text()) or {}
     grid = d.pop("grid", {}) or {}
-    return GridConfig(**_filter(GridConfig, {**d, **grid}))
+    cfg = GridConfig(**_filter(GridConfig, {**d, **grid}))
+    for s in cfg.strategy:
+        _check("strategy", s, STRATEGIES)
+    return cfg
 
 
 def load_multiview(path) -> MultiviewConfig:
     d = yaml.safe_load(Path(path).read_text()) or {}
     p = MVParams(**_filter(MVParams, d.pop("params", {}) or {}))
-    return MultiviewConfig(**_filter(MultiviewConfig, d), params=p)
+    cfg = MultiviewConfig(**_filter(MultiviewConfig, d), params=p)
+    _check("matcher", cfg.matcher, MATCHERS)      # 拼错在加载时就报, 不浪费抽帧/COLMAP
+    _check("strategy", cfg.params.strategy, STRATEGIES)
+    return cfg
