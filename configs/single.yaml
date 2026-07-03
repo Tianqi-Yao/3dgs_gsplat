@@ -1,0 +1,17 @@
+# 单视频: scenes 列一个(= data/<场景>/ 里放一个视频)
+# 跑:  python -m pipeline video --config configs/single.yaml   [-n 干跑]
+scenes:
+  - jeff_0629_iphone1_MID
+
+work_root: scratch       # 本地 ext4 工作盘(COLMAP/训练在这跑; 别用 FUSE)
+out_root: output         # 最终产物落地(16TB)
+
+params:
+  fps: 5
+  width: 1920
+  max_steps: 7000
+  camera_model: OPENCV   # 广角鱼眼用 OPENCV_FISHEYE
+  sh_degree: 3
+  ssim_lambda: 0.2
+  strategy: default      # default / mcmc
+  cap_max: 1000000       # 仅 mcmc

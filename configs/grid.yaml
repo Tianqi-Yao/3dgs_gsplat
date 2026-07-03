@@ -1,0 +1,14 @@
+# 参数网格搜索: 复用 base_scene 现成的 COLMAP 重建, 暴力扫各维组合
+# 跑:  python -m pipeline grid --config configs/grid.yaml
+#      跑完:  python -m pipeline metrics output/_grid_lab --csv grid_lab.csv
+base_scene: lab          # 复用 output/lab/{images,sparse/0}
+work_root: scratch
+out_root: output
+steps: 7000              # 快筛; 精训调大(如 30000)并缩小 grid
+camera_model: OPENCV
+
+grid:                    # default: sh×ssim 个; mcmc: sh×ssim×cap 个
+  strategy: [default, mcmc]
+  sh_degree: [1, 2, 3]
+  ssim_lambda: [0.2, 0.05]
+  cap_max: [300000, 1000000]     # 仅 mcmc

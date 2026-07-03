@@ -1,0 +1,29 @@
+# 多机位合成一个 ply: data/<场景>/ 里放多个视频(同场景不同机位)
+# 跑:  python -m pipeline multiview --config configs/multiview.yaml   [-n 干跑]
+scenes:
+  - jeff_0629
+
+matcher: exhaustive      # exhaustive(全配对,最稳) / seq(顺序+回环,帧多快) / pairs(规整采集) / rig(刚性,实验)
+work_root: scratch
+out_root: output
+
+params:
+  target_per_vid: 150    # 每视频目标抽帧数(按时长自动算 fps)
+  scale_h: 720           # 抽帧目标高度(竖屏=长边)
+  max_steps: 15000
+  camera_model: OPENCV
+  strategy: default      # default / mcmc
+  sh_degree: 3
+  ssim_lambda: 0.2
+  cap_max: 1000000       # 仅 mcmc
+
+matcher_opts:            # 只有选中的 matcher 那组生效
+  seq:
+    overlap: 10          # 机位内: 每帧配前后多少帧
+    loop_num: 50         # 跨机位: 回环检索候选数(机位多调大)
+    vocab_tree: vocab_tree_flickr100K_words256K.bin
+  pairs:
+    intra_overlap: 10    # 机位内相邻
+    inter_window: 15     # 机位间序号窗口 ±(吸收不同步漂移)
+  rig:
+    ba_refine: true      # rig 配好后再做全局 BA

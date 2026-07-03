@@ -1,0 +1,20 @@
+# 批量: 多列几个场景, 逐个跑单视频流程(已完成的自动跳过)
+# 跑:  python -m pipeline batch --config configs/batch.yaml
+scenes:
+  - jeff_0629_iphone1_MID
+  - jeff_0629_iphone1_TOP
+  - jeff_0629_iphone2_MID
+  - jeff_0629_iphone2_TOP
+
+work_root: scratch
+out_root: output
+
+params:
+  fps: 5
+  width: 1920
+  max_steps: 7000
+  camera_model: OPENCV
+  sh_degree: 3
+  ssim_lambda: 0.2
+  strategy: default
+  cap_max: 1000000
