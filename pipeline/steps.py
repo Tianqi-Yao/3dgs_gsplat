@@ -131,8 +131,11 @@ def _apply_rig(scene_dir, images_dir, opts):
     dst = scene_dir / "sparse" / "0"
     shutil.rmtree(scene_dir / "sparse", ignore_errors=True)
     dst.mkdir(parents=True)
-    for f in final.glob("*.bin"):
-        shutil.copy(f, dst)
+    for f in final.iterdir():                 # 复制所有 model 文件(bin 或 txt), 不假设格式
+        if f.is_file():
+            shutil.copy(f, dst)
+    if not any((dst / f"cameras.{e}").exists() for e in ("bin", "txt")):
+        raise RuntimeError(f"rig 最终模型无效: {final} 里没有 cameras.*")
 
 
 # ── 训练 / 搬运 ──────────────────────────────────────────────────────────────

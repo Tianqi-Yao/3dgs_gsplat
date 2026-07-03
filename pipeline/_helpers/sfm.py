@@ -39,7 +39,7 @@ def gen_pairs(images_dir, intra_overlap, inter_window, out_path) -> int:
     images_dir = Path(images_dir)
     groups: dict[str, dict[int, str]] = collections.defaultdict(dict)
     for f in images_dir.iterdir():
-        if f.suffix.lower() != ".jpg":
+        if f.suffix.lower() != ".jpg" or "_" not in f.stem:
             continue
         stem, num = f.name.rsplit("_", 1)
         groups[stem][int(num.split(".")[0])] = f.name

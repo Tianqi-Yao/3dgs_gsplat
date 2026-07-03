@@ -50,7 +50,7 @@ def move_to_output(work_scene, out_scene):
     try:
         shutil.move(str(work_scene), str(out_scene))
     except Exception:
-        shutil.copytree(work_scene, out_scene)
+        shutil.copytree(work_scene, out_scene, dirs_exist_ok=True)
         shutil.rmtree(work_scene, ignore_errors=True)
 
 

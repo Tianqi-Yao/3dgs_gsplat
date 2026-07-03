@@ -1,3 +1,28 @@
-# 本地高速计算工作区(COLMAP/训练中间产物, 成品搬到 output/ 后可清)
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# ── 本地高速计算工作区 & 大文件(可随时重建/下载, 不入库) ──
 /scratch/
+# vocab tree ~113MB, 从 demuc.de/colmap 下载
 vocab_tree_flickr100K_words256K.bin
+
+# ── 数据/产物: 软链到 16TB 盘, 指向本机绝对路径, 对他人是死链 ──
+/data
+/output
+
+# ── 上游 gsplat: 独立仓库, 不 vendored 进本 repo(见 README 获取方式) ──
+/gsplat/
+
+# ── 运行产物 ──
+*.log
+# metrics --csv 导出(grid_lab.csv 等)
+*.csv
+
+# ── 本地设置 / 编辑器 / 系统 ──
+/.claude/
+.vscode/
+.idea/
+.DS_Store

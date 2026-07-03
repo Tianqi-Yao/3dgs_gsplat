@@ -23,8 +23,12 @@ def collect(root="output", csv_path=None):
               or glob.glob(os.path.join(sd, "test_step*.json")))
         if not js:
             continue
-        with open(max(js, key=_stepof)) as fp:
-            d = json.load(fp)
+        try:
+            with open(max(js, key=_stepof)) as fp:
+                d = json.load(fp)
+        except (json.JSONDecodeError, OSError):
+            print(f"⚠ 跳过损坏的 {scene} 指标文件")
+            continue
         rows.append({"scene": scene, "step": _stepof(max(js, key=_stepof)),
                      "psnr": d.get("psnr"), "ssim": d.get("ssim"), "lpips": d.get("lpips"),
                      "num_GS": d.get("num_GS"), "s_per_img": d.get("ellipse_time")})
