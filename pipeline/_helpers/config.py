@@ -29,20 +29,20 @@ class RunConfig:                       # single / batch
 
 
 @dataclass
-class GridConfig:                      # grid
-    base_scene: str = "lab"
+class GridConfig:                      # 两层网格
+    base_scenes: list                  # 每个 = data/<scene>/ 里的视频(室内+室外对照)
     work_root: str = "scratch"
     out_root: str = "output"
     steps: int = 7000
-    camera_model: str = "OPENCV"
-    strategy: list = field(default_factory=lambda: ["default", "mcmc"])
-    sh_degree: list = field(default_factory=lambda: [1, 2, 3])
-    ssim_lambda: list = field(default_factory=lambda: [0.2, 0.05])
-    cap_max: list = field(default_factory=lambda: [300_000, 1_000_000])
+    # 第一层(改了重跑抽帧+COLMAP): 各维取值列表, 笛卡尔积
+    colmap: dict = field(default_factory=lambda: {
+        "camera_model": ["OPENCV"], "scale_h": [720], "target_per_vid": [150]})
+    # 第二层(复用每个 COLMAP base): 任意训练参数 → 取值列表, 笛卡尔积。strategy 必填
+    train: dict = field(default_factory=lambda: {"strategy": ["default"]})
 
     @property
     def out_dir(self) -> str:
-        return f"{self.out_root}/_grid_{self.base_scene}"
+        return f"{self.out_root}/_grid"
 
 
 # ── 多机位 ──────────────────────────────────────────────────────────────────
@@ -98,9 +98,8 @@ def load_run(path) -> RunConfig:
 
 def load_grid(path) -> GridConfig:
     d = yaml.safe_load(Path(path).read_text()) or {}
-    grid = d.pop("grid", {}) or {}
-    cfg = GridConfig(**_filter(GridConfig, {**d, **grid}))
-    for s in cfg.strategy:
+    cfg = GridConfig(**_filter(GridConfig, d))
+    for s in cfg.train.get("strategy", ["default"]):
         _check("strategy", s, STRATEGIES)
     return cfg
 

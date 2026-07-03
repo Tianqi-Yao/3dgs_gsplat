@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import itertools
 import shutil
 from pathlib import Path
 
@@ -76,7 +77,7 @@ def run_multiview(cfg):
                                      matcher=cfg.matcher, opts=cfg.matcher_opts.get(cfg.matcher, {}))
             if not shell.DRY_RUN:
                 sfm.per_view_report(work / "sparse" / "0", rig=rig)
-            steps.train(work, work / "results", p)
+            steps.train(work, work / "results", p.strategy, p.max_steps, steps.params_to_overrides(p))
             steps.finalize(work, dest)
             res["ok" if shell.DRY_RUN or disk.final_ply(dest, p.max_steps).exists() else "fail"].append(scene)
         except Exception as e:
@@ -85,70 +86,91 @@ def run_multiview(cfg):
     _summary(res)
 
 
-# ── 网格搜索 ───────────────────────────────────────────────────────────────
-def grid_combos(cfg):
-    """default: sh×ssim 个; mcmc: sh×ssim×cap 个。"""
-    for s in cfg.strategy:
-        for sh in cfg.sh_degree:
-            for ss in cfg.ssim_lambda:
-                caps = cfg.cap_max if s == "mcmc" else [None]
-                for cap in caps:
-                    name = f"{s}_sh{sh}_ssim{int(round(ss * 100)):03d}"
-                    if cap is not None:
-                        name += f"_cap{cap // 1000}k"
-                    yield name, Params(
-                        max_steps=cfg.steps, camera_model=cfg.camera_model,
-                        strategy=s, sh_degree=sh, ssim_lambda=ss,
-                        cap_max=cap if cap is not None else 1_000_000)
+# ── 两层网格搜索 ───────────────────────────────────────────────────────────
+def _combos(grid: dict) -> list:
+    """{key:[v1,v2], ...} → 笛卡尔积的 dict 列表。空 → [{}]。"""
+    grid = grid or {}
+    keys = list(grid)
+    return [dict(zip(keys, vals)) for vals in itertools.product(*(grid[k] for k in keys))]
+
+
+def _colmap_tag(cc: dict) -> str:
+    return (f"cm{cc.get('camera_model', 'OPENCV')}"
+            f"_h{cc.get('scale_h', 720)}_t{cc.get('target_per_vid', 150)}")
+
+
+def _train_tag(tc: dict) -> str:
+    parts = [tc.get("strategy", "default")]
+    for k, v in tc.items():
+        if k == "strategy":
+            continue
+        parts.append(f"{k}{1 if v is True else 0 if v is False else v}")
+    return "_".join(parts)
+
+
+def _build_grid_base(base: Path, video, cc: dict):
+    """第一层: 抽帧(scale_h/target)+COLMAP(camera_model, 单视频 sequential)。已存在则复用。"""
+    if (base / "sparse" / "0" / "cameras.bin").exists() and (base / "images").exists():
+        print(f"复用 COLMAP base: {base}")
+        return
+    if not shell.DRY_RUN:
+        shutil.rmtree(base, ignore_errors=True)
+    steps.extract_frames_scaled(video, base / "images",
+                                cc.get("target_per_vid", 150), cc.get("scale_h", 720))
+    steps.colmap_reconstruct(base, base / "images",
+                             cc.get("camera_model", "OPENCV"), matcher="sequential")
 
 
 def run_grid(cfg):
     disk.require_local_disk(cfg.work_root)
-    base = _prepare_base(cfg)
     out_dir = Path(cfg.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    combos = list(grid_combos(cfg))
-    print(f"\n网格: {len(combos)} 个组合  steps={cfg.steps}  base={cfg.base_scene}")
+    colmap_combos, train_combos = _combos(cfg.colmap), _combos(cfg.train)
+    total = len(cfg.base_scenes) * len(colmap_combos) * len(train_combos)
+    print(f"\n两层网格: {len(cfg.base_scenes)}场景 × {len(colmap_combos)}COLMAP × "
+          f"{len(train_combos)}训练 = {total} 次  steps={cfg.steps}")
     res = {"ok": [], "skip": [], "fail": []}
-    for name, p in combos:
-        dest = out_dir / name
-        if disk.final_ply(dest, p.max_steps).exists():
-            print(f">>> 跳过 {name} (已有 ply)")
-            res["skip"].append(name)
-            continue
+
+    for scene in cfg.base_scenes:
         try:
-            tag = f"{p.strategy} sh={p.sh_degree} ssim={p.ssim_lambda}"
-            tag += f" cap={p.cap_max}" if p.strategy == "mcmc" else ""
-            print(f"\n>>> 组合 {name}  [{tag}]")
-            wres = Path(cfg.work_root) / f"_grid_{name}"
-            if not shell.DRY_RUN:
-                shutil.rmtree(wres, ignore_errors=True)
-            steps.train(base, wres / "results", p)     # data_dir=共享 base
-            steps.finalize(wres, dest)
-            res["ok" if shell.DRY_RUN or disk.final_ply(dest, p.max_steps).exists() else "fail"].append(name)
-        except Exception as e:                          # 一个组合 OOM/失败, 继续下一个
-            print(f"✗ {name} 失败: {e}")
-            res["fail"].append(name)
+            video = disk.find_video(Path("data") / scene)     # grid 假设单视频场景
+        except Exception as e:
+            print(f"✗ 场景 {scene} 无视频: {e}")
+            for cc in colmap_combos:
+                for tc in train_combos:
+                    res["fail"].append(f"{scene}__{_colmap_tag(cc)}__{_train_tag(tc)}")
+            continue
+        for cc in colmap_combos:
+            variant = f"{scene}__{_colmap_tag(cc)}"
+            base = Path(cfg.work_root) / f"_gbase_{variant}"
+            try:
+                _build_grid_base(base, video, cc)
+            except Exception as e:
+                print(f"✗ COLMAP base {variant} 失败: {e}")
+                for tc in train_combos:
+                    res["fail"].append(f"{variant}__{_train_tag(tc)}")
+                continue
+            for tc in train_combos:
+                name = f"{variant}__{_train_tag(tc)}"
+                dest = out_dir / name
+                if disk.final_ply(dest, cfg.steps).exists():
+                    print(f">>> 跳过 {name} (已有 ply)")
+                    res["skip"].append(name)
+                    continue
+                try:
+                    print(f"\n>>> {name}")
+                    wres = Path(cfg.work_root) / f"_g_{name}"
+                    if not shell.DRY_RUN:
+                        shutil.rmtree(wres, ignore_errors=True)
+                    steps.train(base, wres / "results", tc.get("strategy", "default"), cfg.steps, tc)
+                    steps.finalize(wres, dest)
+                    ok = shell.DRY_RUN or disk.final_ply(dest, cfg.steps).exists()
+                    res["ok" if ok else "fail"].append(name)
+                except Exception as e:
+                    print(f"✗ {name} 失败: {e}")
+                    res["fail"].append(name)
     _summary(res)
-    print(f"出对比表: python -m pipeline metrics {out_dir} --csv {out_dir.name}.csv")
-
-
-def _prepare_base(cfg) -> Path:
-    """复用 output/<base_scene> 的 images+sparse, 复制到本地 base(不重跑 COLMAP)。"""
-    base = Path(cfg.work_root) / f"_grid_base_{cfg.base_scene}"
-    if (base / "sparse" / "0" / "cameras.bin").exists() and (base / "images").exists():
-        print(f"复用本地 base: {base}")
-        return base
-    src = Path(cfg.out_root) / cfg.base_scene
-    if not ((src / "sparse" / "0" / "cameras.bin").exists() and (src / "images").exists()):
-        raise SystemExit(f"✗ 基准场景 {src} 缺 images/ 或 sparse/0/; 先把它跑出来")
-    print(f"从 {src} 复制 base -> {base}")
-    if not shell.DRY_RUN:
-        shutil.rmtree(base, ignore_errors=True)
-        base.mkdir(parents=True)
-        shutil.copytree(src / "images", base / "images")
-        shutil.copytree(src / "sparse", base / "sparse")
-    return base
+    print(f"出对比表: python -m pipeline metrics {out_dir} --csv grid.csv")
 
 
 def _summary(res):

@@ -1,9 +1,10 @@
 # 多机位合成一个 ply: data/<场景>/ 里放多个视频(同场景不同机位)
 # 跑:  python -m pipeline multiview --config configs/multiview.yaml   [-n 干跑]
 scenes:
-  - jeff_0629
+  - sanbore_corn_mid
+  - sanbore_corn_top
 
-matcher: exhaustive      # exhaustive(全配对,最稳) / seq(顺序+回环,帧多快) / pairs(规整采集) / rig(刚性,实验)
+matcher: pairs      # exhaustive(全配对,最稳) / seq(顺序+回环,帧多快) / pairs(规整采集) / rig(刚性,实验)
 work_root: scratch
 out_root: output
 

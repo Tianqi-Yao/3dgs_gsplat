@@ -138,16 +138,61 @@ def _apply_rig(scene_dir, images_dir, opts):
         raise RuntimeError(f"rig 最终模型无效: {final} 里没有 cameras.*")
 
 
+# ── grid COLMAP 层用: 按 target 算 fps, 抽到指定高度 scale_h ──────────────────
+def extract_frames_scaled(video, images_dir, target_per_vid, scale_h, fps_min=2, fps_max=15):
+    if not shell.DRY_RUN:
+        Path(images_dir).mkdir(parents=True, exist_ok=True)
+    dur, fps = _fps_for(video, target_per_vid, fps_min, fps_max)
+    print(f"  抽帧: 时长={dur}s -> fps={fps:.3f}, 高={scale_h}")
+    run(["ffmpeg", "-nostdin", "-y", "-i", video,
+         "-vf", f"fps={fps:.3f},scale=-2:{scale_h}", "-qscale:v", "2",
+         f"{images_dir}/frame_%04d.jpg"])
+
+
 # ── 训练 / 搬运 ──────────────────────────────────────────────────────────────
-def train(data_dir, result_dir, p):
-    """调 gsplat simple_trainer(子进程)。固定 --lpips_net alex + --eval_steps=max_steps。"""
-    data_dir, result_dir = Path(data_dir).resolve(), Path(result_dir).resolve()
-    cmd = ["python", "simple_trainer.py", p.strategy,
-           "--data_dir", data_dir, "--data_factor", "1", "--result_dir", result_dir,
-           "--max_steps", p.max_steps, "--eval_steps", p.max_steps, "--lpips_net", "alex",
-           "--sh_degree", p.sh_degree, "--ssim_lambda", p.ssim_lambda]
+# 哪些 override 键属于 strategy(用 --strategy.x)、各适用于哪个 strategy
+STRATEGY_PARAMS = {
+    "cap_max": {"mcmc"}, "noise_lr": {"mcmc"}, "min_opacity": {"mcmc"},
+    "grow_grad2d": {"default"}, "grow_scale3d": {"default"}, "prune_opa": {"default"},
+    "refine_stop_iter": {"default", "mcmc"}, "refine_start_iter": {"default", "mcmc"},
+}
+BOOL_FLAGS = {"app_opt", "pose_opt", "antialiased", "random_bkgd"}
+
+
+def _override_args(strategy, ov: dict) -> list:
+    """把 {参数:值} 拼成命令行。bool 仅 True 加 flag; Optional 非 None 加;
+    strategy 参数用 --strategy.x 且只在适用的 strategy 下加; 其余 --x 值。"""
+    args = []
+    for k, v in ov.items():
+        if k == "strategy":
+            continue
+        if k in STRATEGY_PARAMS:
+            if strategy in STRATEGY_PARAMS[k]:
+                args += [f"--strategy.{k}", v]
+        elif k in BOOL_FLAGS:
+            if v:
+                args += [f"--{k}"]
+        elif v is not None:
+            args += [f"--{k}", v]
+    return args
+
+
+def params_to_overrides(p) -> dict:
+    """video/batch/multiview 的 Params → overrides(只传安全的几个)。"""
+    ov = {"sh_degree": p.sh_degree, "ssim_lambda": p.ssim_lambda}
     if p.strategy == "mcmc":
-        cmd += ["--strategy.cap_max", getattr(p, "cap_max", 1_000_000)]
+        ov["cap_max"] = getattr(p, "cap_max", 1_000_000)
+    return ov
+
+
+def train(data_dir, result_dir, strategy, steps, overrides: dict):
+    """调 gsplat simple_trainer(子进程)。固定 --lpips_net alex + --eval_steps=max_steps。
+    overrides 里只放要显式覆盖的参数(不放的用 gsplat/具名配置默认, 不误覆盖 mcmc)。"""
+    data_dir, result_dir = Path(data_dir).resolve(), Path(result_dir).resolve()
+    cmd = ["python", "simple_trainer.py", strategy,
+           "--data_dir", data_dir, "--data_factor", "1", "--result_dir", result_dir,
+           "--max_steps", steps, "--eval_steps", steps, "--lpips_net", "alex"]
+    cmd += _override_args(strategy, overrides)
     cmd += ["--save_ply", "--disable_video", "--disable_viewer"]
     run(cmd, cwd=ROOT / "gsplat" / "examples")
 

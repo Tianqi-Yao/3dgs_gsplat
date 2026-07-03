@@ -1,14 +1,25 @@
-# 参数网格搜索: 复用 base_scene 现成的 COLMAP 重建, 暴力扫各维组合
-# 跑:  python -m pipeline grid --config configs/grid.yaml
-#      跑完:  python -m pipeline metrics output/_grid_lab --csv grid_lab.csv
-base_scene: lab          # 复用 output/lab/{images,sparse/0}
+# 两层参数网格: 第一层(colmap)改了重跑 COLMAP, 第二层(train)复用 base 只重训练
+# 跑:   python -m pipeline grid --config configs/grid.yaml   [-n 干跑]
+# 出表: python -m pipeline metrics output/_grid --csv grid.csv
+base_scenes:
+  - sanbore_corn_mid       # 室外近景(重灾区)
+  - farmNG_v1_mid           # output/lab 已清; 填一个 data/<场景>/ 有视频的室内场景做对照
+
 work_root: scratch
 out_root: output
-steps: 7000              # 快筛; 精训调大(如 30000)并缩小 grid
-camera_model: OPENCV
+steps: 7000
 
-grid:                    # default: sh×ssim 个; mcmc: sh×ssim×cap 个
-  strategy: [default, mcmc]
-  sh_degree: [1, 2, 3]
-  ssim_lambda: [0.2, 0.05]
-  cap_max: [300000, 1000000]     # 仅 mcmc
+# ── 第一层: 改了重跑抽帧+COLMAP。阶段A单值; 阶段B再加多值 ──
+colmap:
+  camera_model: [OPENCV]        # 阶段B: [OPENCV, FULL_OPENCV]
+  scale_h: [720]                # 阶段B: [720, 1080, 1440]  ← 近景清晰度
+  target_per_vid: [150]
+
+# ── 第二层: 复用每个 COLMAP base, 任意训练参数笛卡尔积。strategy 必填 ──
+train:
+  strategy: [default, mcmc]     # 阶段A 户外主流开关:
+  app_opt: [true, false]        #   光照/曝光变化(户外头号)
+  pose_opt: [true, false]       #   颠簸/位姿漂移
+  cap_max: [1000000]            #   仅 mcmc 生效
+  # 阶段C 细化可加: patch_size:[256]  antialiased:[true]  app_embed_dim:[32]
+  #   post_processing:[bilateral_grid]  init_scale:[0.5]  grow_grad2d:[0.0001]
