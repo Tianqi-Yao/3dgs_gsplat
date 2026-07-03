@@ -17,7 +17,7 @@ def pick_sparse0(sparse_dir) -> Path:
     subs = [d for d in sorted(sparse.iterdir())
             if d.is_dir() and (d / "cameras.bin").exists()]
     if not subs:
-        raise SystemExit("✗ COLMAP 未建出有效模型")
+        raise RuntimeError("COLMAP 未建出有效模型")
     n = lambda d: len(pycolmap.Reconstruction(str(d)).images)
     best = max(subs, key=n)
     print(f"选中 {best} (注册 {n(best)} / 子模型 {len(subs)} 个)")

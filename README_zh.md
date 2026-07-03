@@ -37,6 +37,8 @@ conda activate gsplat
 
 ## 60 秒上手
 
+> 所有 `python -m pipeline` 命令在**项目根目录**下运行（`-m` 要在这里才找得到包）。
+
 ```bash
 mkdir -p data/myscene && mv 我的视频.mp4 data/myscene/     # 一个场景 = 一个文件夹
 python -m pipeline video --config configs/single.yaml      # 场景名在 yaml 的 scenes: 里改

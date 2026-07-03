@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import os
 
-from . import shell
+from . import disk, shell
 from .config import load_run, load_grid, load_multiview
 
 
@@ -21,17 +22,20 @@ def main(argv=None):
 
     if a.cmd == "metrics":
         from . import metrics
+        os.chdir(disk.ROOT)                    # root/output 等相对项目根
         metrics.collect(a.root, a.csv)
         return
 
+    cfg_path = os.path.abspath(a.config)       # --config 相对用户当前目录先解析
+    os.chdir(disk.ROOT)                        # 之后 data/scratch/output 都相对项目根, 不管从哪跑
     shell.DRY_RUN = a.dry_run
     from .. import workflow
     if a.cmd in ("video", "batch"):
-        workflow.run_batch(load_run(a.config))
+        workflow.run_batch(load_run(cfg_path))
     elif a.cmd == "grid":
-        workflow.run_grid(load_grid(a.config))
+        workflow.run_grid(load_grid(cfg_path))
     elif a.cmd == "multiview":
-        workflow.run_multiview(load_multiview(a.config))
+        workflow.run_multiview(load_multiview(cfg_path))
 
 
 if __name__ == "__main__":

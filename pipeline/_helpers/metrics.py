@@ -23,7 +23,8 @@ def collect(root="output", csv_path=None):
               or glob.glob(os.path.join(sd, "test_step*.json")))
         if not js:
             continue
-        d = json.load(open(max(js, key=_stepof)))
+        with open(max(js, key=_stepof)) as fp:
+            d = json.load(fp)
         rows.append({"scene": scene, "step": _stepof(max(js, key=_stepof)),
                      "psnr": d.get("psnr"), "ssim": d.get("ssim"), "lpips": d.get("lpips"),
                      "num_GS": d.get("num_GS"), "s_per_img": d.get("ellipse_time")})

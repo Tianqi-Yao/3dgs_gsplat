@@ -30,7 +30,7 @@ def find_videos(scene_dir) -> list[Path]:
     d = Path(scene_dir)
     hits = sorted(h for g in _VIDEO_GLOBS for h in d.glob(g))
     if not hits:
-        sys.exit(f"✗ {d}/ 里没找到视频(.mp4/.MP4/.mov/.MOV)")
+        raise FileNotFoundError(f"{d}/ 里没找到视频(.mp4/.MP4/.mov/.MOV)")
     return hits
 
 

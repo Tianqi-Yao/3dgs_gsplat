@@ -18,7 +18,8 @@ VOCAB_DEFAULT = "vocab_tree_flickr100K_words256K.bin"
 
 # ── 抽帧 ────────────────────────────────────────────────────────────────────
 def extract_frames(video, images_dir, fps, width):
-    Path(images_dir).mkdir(parents=True, exist_ok=True)
+    if not shell.DRY_RUN:
+        Path(images_dir).mkdir(parents=True, exist_ok=True)
     run(["ffmpeg", "-nostdin", "-y", "-i", video,
          "-vf", f"fps={fps},scale={width}:-1", "-qscale:v", "2",
          f"{images_dir}/frame_%04d.jpg"])
@@ -45,10 +46,12 @@ def extract_frames_multiview(videos, images_dir, p, rig=False):
         print(f"  {prefix}: 时长={dur}s -> fps={fps:.3f}")
         if rig:
             out = images_dir / prefix
-            out.mkdir(parents=True, exist_ok=True)
+            if not shell.DRY_RUN:
+                out.mkdir(parents=True, exist_ok=True)
             pattern = f"{out}/%04d.jpg"
         else:
-            images_dir.mkdir(parents=True, exist_ok=True)
+            if not shell.DRY_RUN:
+                images_dir.mkdir(parents=True, exist_ok=True)
             pattern = f"{images_dir}/{prefix}_%04d.jpg"
         run(["ffmpeg", "-nostdin", "-y", "-i", v,
              "-vf", f"fps={fps:.3f},scale=-2:{p.scale_h}", "-qscale:v", "2", pattern])
@@ -60,9 +63,10 @@ def colmap_reconstruct(scene_dir, images_dir, camera_model, matcher="sequential"
     opts = opts or {}
     scene_dir, images_dir = Path(scene_dir), Path(images_dir)
     db = scene_dir / "database.db"
-    if not shell.DRY_RUN and db.exists():
-        db.unlink()
-    shutil.rmtree(scene_dir / "sparse", ignore_errors=True)
+    if not shell.DRY_RUN:
+        if db.exists():
+            db.unlink()
+        shutil.rmtree(scene_dir / "sparse", ignore_errors=True)
 
     cam_flag = "--ImageReader.single_camera_per_folder" if matcher == "rig" else "--ImageReader.single_camera"
     run(["colmap", "feature_extractor", "--database_path", db, "--image_path", images_dir,
@@ -70,7 +74,8 @@ def colmap_reconstruct(scene_dir, images_dir, camera_model, matcher="sequential"
 
     _match(db, images_dir, scene_dir, matcher, opts)
 
-    (scene_dir / "sparse").mkdir(parents=True, exist_ok=True)
+    if not shell.DRY_RUN:
+        (scene_dir / "sparse").mkdir(parents=True, exist_ok=True)
     run(["colmap", "mapper", "--database_path", db, "--image_path", images_dir,
          "--output_path", scene_dir / "sparse"])
 

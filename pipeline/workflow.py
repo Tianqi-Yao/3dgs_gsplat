@@ -43,7 +43,11 @@ def run_batch(cfg):
     Path(cfg.out_root).mkdir(parents=True, exist_ok=True)
     res = {"ok": [], "skip": [], "fail": []}
     for scene in cfg.scenes:
-        res[run_video(scene, cfg)].append(scene)
+        try:
+            res[run_video(scene, cfg)].append(scene)     # 单个失败不影响其余
+        except Exception as e:
+            print(f"✗ {scene} 失败: {e}")
+            res["fail"].append(scene)
     _summary(res)
 
 
@@ -61,20 +65,23 @@ def run_multiview(cfg):
             print(f">>> 跳过 {scene} (已有最终 ply)")
             res["skip"].append(scene)
             continue
+        try:
+            print(f"\n>>> 多机位 {scene}  matcher={cfg.matcher}")
+            videos = disk.find_videos(Path("data") / scene)
+            if not shell.DRY_RUN:
+                shutil.rmtree(work, ignore_errors=True)
 
-        print(f"\n>>> 多机位 {scene}  matcher={cfg.matcher}")
-        videos = disk.find_videos(Path("data") / scene)
-        if not shell.DRY_RUN:
-            shutil.rmtree(work, ignore_errors=True)
-
-        steps.extract_frames_multiview(videos, work / "images", p, rig=rig)
-        steps.colmap_reconstruct(work, work / "images", p.camera_model,
-                                 matcher=cfg.matcher, opts=cfg.matcher_opts.get(cfg.matcher, {}))
-        if not shell.DRY_RUN:
-            sfm.per_view_report(work / "sparse" / "0", rig=rig)
-        steps.train(work, work / "results", p)
-        steps.finalize(work, dest)
-        res["ok" if shell.DRY_RUN or disk.final_ply(dest, p.max_steps).exists() else "fail"].append(scene)
+            steps.extract_frames_multiview(videos, work / "images", p, rig=rig)
+            steps.colmap_reconstruct(work, work / "images", p.camera_model,
+                                     matcher=cfg.matcher, opts=cfg.matcher_opts.get(cfg.matcher, {}))
+            if not shell.DRY_RUN:
+                sfm.per_view_report(work / "sparse" / "0", rig=rig)
+            steps.train(work, work / "results", p)
+            steps.finalize(work, dest)
+            res["ok" if shell.DRY_RUN or disk.final_ply(dest, p.max_steps).exists() else "fail"].append(scene)
+        except Exception as e:
+            print(f"✗ {scene} 失败: {e}")
+            res["fail"].append(scene)
     _summary(res)
 
 
@@ -109,15 +116,19 @@ def run_grid(cfg):
             print(f">>> 跳过 {name} (已有 ply)")
             res["skip"].append(name)
             continue
-        tag = f"{p.strategy} sh={p.sh_degree} ssim={p.ssim_lambda}"
-        tag += f" cap={p.cap_max}" if p.strategy == "mcmc" else ""
-        print(f"\n>>> 组合 {name}  [{tag}]")
-        wres = Path(cfg.work_root) / f"_grid_{name}"
-        if not shell.DRY_RUN:
-            shutil.rmtree(wres, ignore_errors=True)
-        steps.train(base, wres / "results", p)     # data_dir=共享 base
-        steps.finalize(wres, dest)
-        res["ok" if shell.DRY_RUN or disk.final_ply(dest, p.max_steps).exists() else "fail"].append(name)
+        try:
+            tag = f"{p.strategy} sh={p.sh_degree} ssim={p.ssim_lambda}"
+            tag += f" cap={p.cap_max}" if p.strategy == "mcmc" else ""
+            print(f"\n>>> 组合 {name}  [{tag}]")
+            wres = Path(cfg.work_root) / f"_grid_{name}"
+            if not shell.DRY_RUN:
+                shutil.rmtree(wres, ignore_errors=True)
+            steps.train(base, wres / "results", p)     # data_dir=共享 base
+            steps.finalize(wres, dest)
+            res["ok" if shell.DRY_RUN or disk.final_ply(dest, p.max_steps).exists() else "fail"].append(name)
+        except Exception as e:                          # 一个组合 OOM/失败, 继续下一个
+            print(f"✗ {name} 失败: {e}")
+            res["fail"].append(name)
     _summary(res)
     print(f"出对比表: python -m pipeline metrics {out_dir} --csv {out_dir.name}.csv")
 

@@ -37,6 +37,8 @@ conda activate gsplat
 
 ## Quick start (60s)
 
+> Run all `python -m pipeline` commands from the **project root** (that's where `-m` finds the package).
+
 ```bash
 mkdir -p data/myscene && mv my_video.mp4 data/myscene/     # a scene = one folder
 python -m pipeline video --config configs/single.yaml      # edit scenes: in the yaml
