@@ -133,7 +133,10 @@ def run_grid(cfg):
 
     for scene in cfg.base_scenes:
         try:
-            video = disk.find_video(Path("data") / scene)     # grid 假设单视频场景
+            vids = disk.find_videos(Path("data") / scene)     # grid 假设单视频场景
+            if len(vids) > 1:
+                print(f"⚠ {scene} 有 {len(vids)} 个视频, grid 单视频模式只用第一个: {vids[0].name}")
+            video = vids[0]
         except Exception as e:
             print(f"✗ 场景 {scene} 无视频: {e}")
             for cc in colmap_combos:
