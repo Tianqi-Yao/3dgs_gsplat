@@ -14,7 +14,6 @@ from pathlib import Path
 
 from . import steps
 from ._helpers import shell, disk, sfm
-from ._helpers.config import Params
 
 
 # ── 单视频 / 批量 ──────────────────────────────────────────────────────────
