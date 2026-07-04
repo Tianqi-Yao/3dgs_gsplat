@@ -42,7 +42,9 @@ def gen_pairs(images_dir, intra_overlap, inter_window, out_path) -> int:
         if f.suffix.lower() != ".jpg" or "_" not in f.stem:
             continue
         stem, num = f.name.rsplit("_", 1)
-        groups[stem][int(num.split(".")[0])] = f.name
+        idx = num.split(".")[0]
+        if idx.isdigit():                      # 跳过 前缀_非数字.jpg, 不崩
+            groups[stem][int(idx)] = f.name
 
     pairs: set[tuple[str, str]] = set()
     def add(a, b):
@@ -71,6 +73,8 @@ def write_rig_config(images_dir, out_path) -> list[str]:
     """每个机位子文件夹一个 sensor, 第一个作参考。写 rig.json。"""
     images_dir = Path(images_dir)
     subs = sorted(d.name for d in images_dir.iterdir() if d.is_dir())
+    if not subs:
+        raise RuntimeError(f"{images_dir} 下没有机位子文件夹, rig 需每机位一个子目录")
     cams = []
     for i, s in enumerate(subs):
         c = {"image_prefix": f"{s}/"}

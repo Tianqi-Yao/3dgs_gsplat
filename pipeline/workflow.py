@@ -33,7 +33,7 @@ def run_video(scene, cfg) -> str:
 
     steps.extract_frames(video, work / "images", p.fps, p.width)
     steps.colmap_reconstruct(work, work / "images", p.camera_model, matcher="sequential")
-    steps.train(work, work / "results", p)
+    steps.train(work, work / "results", p.strategy, p.max_steps, steps.params_to_overrides(p))
     steps.finalize(work, dest)
     return "ok" if shell.DRY_RUN or disk.final_ply(dest, p.max_steps).exists() else "fail"
 
