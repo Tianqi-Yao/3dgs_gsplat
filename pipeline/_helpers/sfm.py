@@ -86,6 +86,27 @@ def write_rig_config(images_dir, out_path) -> list[str]:
     return subs
 
 
+def colmap_report(sparse0_dir, n_frames=None) -> dict:
+    """读一个 sparse/0 的重建质量: 注册图像数、点数、平均重投影误差、畸变是否收敛。"""
+    import statistics
+    import pycolmap
+    rec = pycolmap.Reconstruction(str(sparse0_dir))
+    errs = [p.error for p in rec.points3D.values()]
+    cam = next(iter(rec.cameras.values()))
+    # OPENCV/RADIAL/SIMPLE_RADIAL 的 k1 都在 params 的第 4 个(index 3)之后; 取首个畸变项
+    k1 = cam.params[4] if len(cam.params) > 4 else (cam.params[3] if len(cam.params) > 3 else 0.0)
+    return {
+        "registered": len(rec.images),
+        "frames": n_frames,
+        "reg_rate": (len(rec.images) / n_frames) if n_frames else None,
+        "points": len(rec.points3D),
+        "reproj_px": statistics.mean(errs) if errs else None,
+        "model": cam.model.name,
+        "k1": float(k1),
+        "k1_ok": abs(float(k1)) < 1.0,          # 畸变收敛判据
+    }
+
+
 def per_view_report(sparse0_dir, rig=False) -> dict:
     """统计 sparse/0 里各视角(前缀 / rig 子文件夹)注册了多少帧。"""
     import pycolmap

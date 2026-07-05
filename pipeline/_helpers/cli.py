@@ -15,6 +15,9 @@ def main(argv=None):
         s = sub.add_parser(c, help=f"跑 {c} 流程")
         s.add_argument("--config", "-c", required=True, help="YAML 配置")
         s.add_argument("--dry-run", "-n", action="store_true", help="只打印命令不执行")
+        if c == "grid":
+            s.add_argument("--colmap-only", "-C", action="store_true",
+                           help="只跑 COLMAP 报注册率, 不训练(快扫 matcher/相机模型)")
     m = sub.add_parser("metrics", help="汇总各场景 PSNR/SSIM/LPIPS")
     m.add_argument("root", nargs="?", default="output", help="扫 <root>/*/results/stats/")
     m.add_argument("--csv", help="同时导出 csv")
@@ -33,7 +36,7 @@ def main(argv=None):
     if a.cmd in ("video", "batch"):
         workflow.run_batch(load_run(cfg_path))
     elif a.cmd == "grid":
-        workflow.run_grid(load_grid(cfg_path))
+        workflow.run_grid(load_grid(cfg_path), colmap_only=a.colmap_only)
     elif a.cmd == "multiview":
         workflow.run_multiview(load_multiview(cfg_path))
 

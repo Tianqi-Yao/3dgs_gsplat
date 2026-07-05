@@ -81,6 +81,7 @@ def _filter(cls, d):
 
 STRATEGIES = ("default", "mcmc")
 MATCHERS = ("exhaustive", "seq", "pairs", "rig")
+GRID_MATCHERS = ("sequential", "exhaustive", "seq")     # grid 单视频只支持这几个
 
 
 def _check(name, val, choices):
@@ -101,6 +102,8 @@ def load_grid(path) -> GridConfig:
     cfg = GridConfig(**_filter(GridConfig, d))
     for s in cfg.train.get("strategy", ["default"]):
         _check("strategy", s, STRATEGIES)
+    for m in cfg.colmap.get("matcher", ["sequential"]):
+        _check("matcher", m, GRID_MATCHERS)
     return cfg
 
 

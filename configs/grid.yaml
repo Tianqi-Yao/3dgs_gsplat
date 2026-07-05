@@ -9,11 +9,14 @@ work_root: scratch
 out_root: output
 steps: 7000
 
-# ── 第一层: 改了重跑抽帧+COLMAP。阶段A单值; 阶段B再加多值 ──
+# ── 第一层: 改了重跑抽帧+COLMAP ──
+# COLMAP 快扫(只跑COLMAP不训练, 看注册率): python -m pipeline grid -c configs/grid.yaml --colmap-only
 colmap:
-  camera_model: [OPENCV]        # 阶段B: [OPENCV, FULL_OPENCV]
-  scale_h: [720]                # 阶段B: [720, 1080, 1440]  ← 近景清晰度
-  target_per_vid: [150]
+  # 第一轮精简(2场景×2×2×1 = 8次); 有效后再把注释里的加回跑第二轮
+  matcher: [exhaustive, seq]              # 去掉已知失败的 sequential; 二轮可加回对照
+  camera_model: [OPENCV, SIMPLE_RADIAL]   # 8参(室外发散了) vs 1参(最稳); 二轮加 RADIAL
+  target_per_vid: [300]                   # 二轮加 800(更密的帧)
+  scale_h: [720]
 
 # ── 第二层: 复用每个 COLMAP base, 任意训练参数笛卡尔积。strategy 必填 ──
 train:

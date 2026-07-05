@@ -94,7 +94,7 @@ def _combos(grid: dict) -> list:
 
 
 def _colmap_tag(cc: dict) -> str:
-    return (f"cm{cc.get('camera_model', 'OPENCV')}"
+    return (f"m{cc.get('matcher', 'sequential')}_cm{cc.get('camera_model', 'OPENCV')}"
             f"_h{cc.get('scale_h', 720)}_t{cc.get('target_per_vid', 150)}")
 
 
@@ -116,19 +116,24 @@ def _build_grid_base(base: Path, video, cc: dict):
         shutil.rmtree(base, ignore_errors=True)
     steps.extract_frames_scaled(video, base / "images",
                                 cc.get("target_per_vid", 150), cc.get("scale_h", 720))
-    steps.colmap_reconstruct(base, base / "images",
-                             cc.get("camera_model", "OPENCV"), matcher="sequential")
+    steps.colmap_reconstruct(base, base / "images", cc.get("camera_model", "OPENCV"),
+                             matcher=cc.get("matcher", "sequential"))
 
 
-def run_grid(cfg):
+def run_grid(cfg, colmap_only=False):
     disk.require_local_disk(cfg.work_root)
     out_dir = Path(cfg.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     colmap_combos, train_combos = _combos(cfg.colmap), _combos(cfg.train)
-    total = len(cfg.base_scenes) * len(colmap_combos) * len(train_combos)
-    print(f"\n两层网格: {len(cfg.base_scenes)}场景 × {len(colmap_combos)}COLMAP × "
-          f"{len(train_combos)}训练 = {total} 次  steps={cfg.steps}")
+    if colmap_only:
+        print(f"\nCOLMAP 快扫: {len(cfg.base_scenes)}场景 × {len(colmap_combos)}COLMAP = "
+              f"{len(cfg.base_scenes) * len(colmap_combos)} 次(不训练)")
+    else:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        total = len(cfg.base_scenes) * len(colmap_combos) * len(train_combos)
+        print(f"\n两层网格: {len(cfg.base_scenes)}场景 × {len(colmap_combos)}COLMAP × "
+              f"{len(train_combos)}训练 = {total} 次  steps={cfg.steps}")
     res = {"ok": [], "skip": [], "fail": []}
+    reports = []
 
     for scene in cfg.base_scenes:
         try:
@@ -138,9 +143,6 @@ def run_grid(cfg):
             video = vids[0]
         except Exception as e:
             print(f"✗ 场景 {scene} 无视频: {e}")
-            for cc in colmap_combos:
-                for tc in train_combos:
-                    res["fail"].append(f"{scene}__{_colmap_tag(cc)}__{_train_tag(tc)}")
             continue
         for cc in colmap_combos:
             variant = f"{scene}__{_colmap_tag(cc)}"
@@ -149,9 +151,20 @@ def run_grid(cfg):
                 _build_grid_base(base, video, cc)
             except Exception as e:
                 print(f"✗ COLMAP base {variant} 失败: {e}")
-                for tc in train_combos:
-                    res["fail"].append(f"{variant}__{_train_tag(tc)}")
+                if not colmap_only:
+                    for tc in train_combos:
+                        res["fail"].append(f"{variant}__{_train_tag(tc)}")
                 continue
+
+            if colmap_only:                        # 只报注册率, 跳过训练
+                if not shell.DRY_RUN:
+                    try:
+                        n = len(list((base / "images").glob("*.jpg")))
+                        reports.append((variant, sfm.colmap_report(base / "sparse" / "0", n)))
+                    except Exception as e:
+                        print(f"⚠ {variant} 读取重建失败: {e}")
+                continue
+
             for tc in train_combos:
                 name = f"{variant}__{_train_tag(tc)}"
                 dest = out_dir / name
@@ -171,8 +184,25 @@ def run_grid(cfg):
                 except Exception as e:
                     print(f"✗ {name} 失败: {e}")
                     res["fail"].append(name)
-    _summary(res)
-    print(f"出对比表: python -m pipeline metrics {out_dir} --csv grid.csv")
+
+    if colmap_only:
+        _colmap_summary(reports)
+    else:
+        _summary(res)
+        print(f"出对比表: python -m pipeline metrics {out_dir} --csv grid.csv")
+
+
+def _colmap_summary(reports):
+    print("\n" + "#" * 70)
+    print("# COLMAP 快扫结果(按注册率排序; 注册率高 + 畸变OK = 能重建)")
+    print("| 配置 | 注册/帧 | 注册率 | 点数 | 重投影px | 相机 | k1 | 畸变OK |")
+    print("|---|---|---|---|---|---|---|---|")
+    for variant, r in sorted(reports, key=lambda x: -(x[1]["reg_rate"] or 0)):
+        rate = f"{r['reg_rate'] * 100:.0f}%" if r["reg_rate"] is not None else "-"
+        rp = f"{r['reproj_px']:.2f}" if r["reproj_px"] else "-"
+        print(f"| {variant} | {r['registered']}/{r['frames']} | {rate} | {r['points']} | "
+              f"{rp} | {r['model']} | {r['k1']:.3f} | {'✓' if r['k1_ok'] else '✗'} |")
+    print("#" * 70)
 
 
 def _summary(res):
