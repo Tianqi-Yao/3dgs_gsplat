@@ -2,8 +2,8 @@
 # 跑:   python -m pipeline grid --config configs/grid.yaml   [-n 干跑]
 # 出表: python -m pipeline metrics output/_grid --csv grid.csv
 base_scenes:
-  - sanbore_corn_mid       # 室外近景(重灾区)
-  - farmNG_v1_mid           # output/lab 已清; 填一个 data/<场景>/ 有视频的室内场景做对照
+  - sanbore_corn_mid       # 加密验证: 只测室外(室内已知 OK)
+  # - farmNG_v1_mid        # 室内对照(需要时取消注释)
 
 work_root: scratch
 out_root: output
@@ -12,10 +12,10 @@ steps: 7000
 # ── 第一层: 改了重跑抽帧+COLMAP ──
 # COLMAP 快扫(只跑COLMAP不训练, 看注册率): python -m pipeline grid -c configs/grid.yaml --colmap-only
 colmap:
-  # 第一轮精简(2场景×2×2×1 = 8次); 有效后再把注释里的加回跑第二轮
-  matcher: [exhaustive, seq]              # 去掉已知失败的 sequential; 二轮可加回对照
-  camera_model: [OPENCV, SIMPLE_RADIAL]   # 8参(室外发散了) vs 1参(最稳); 二轮加 RADIAL
-  target_per_vid: [300]                   # 二轮加 800(更密的帧)
+  # ✅ 已验证: sequential + SIMPLE_RADIAL + target1500 → 室外 100% 注册(第一轮300才0.7%)
+  matcher: [sequential]          # 轨迹型近景用 sequential + 密帧
+  camera_model: [SIMPLE_RADIAL]  # 畸变收敛(k1≈0)
+  target_per_vid: [1500]         # 关键: 密帧(fps~10); 稀帧会断链
   scale_h: [720]
 
 # ── 第二层: 复用每个 COLMAP base, 任意训练参数笛卡尔积。strategy 必填 ──
