@@ -56,6 +56,10 @@ Add `-n` / `--dry-run` to any command to print the commands without running.
 | multi-rig fusion | `python -m pipeline multiview --config configs/multiview.yaml` | [docs/multiview.md](docs/multiview.md) |
 | grid search | `python -m pipeline grid --config configs/grid.yaml` | [docs/grid.md](docs/grid.md) |
 
+> **Bad results (especially outdoor)?** Run `python -m pipeline grid -c configs/grid.yaml --colmap-only`
+> first to check the COLMAP **registration rate** — often the reconstruction failed (few images registered),
+> not the training. See [docs/grid.md](docs/grid.md).
+
 ## Metrics
 
 ```bash

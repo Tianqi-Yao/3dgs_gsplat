@@ -56,6 +56,9 @@ python -m pipeline video --config configs/single.yaml      # 场景名在 yaml �
 | 多机位合成 | `python -m pipeline multiview --config configs/multiview.yaml` | [docs/multiview.md](docs/multiview.md) |
 | 网格搜索 | `python -m pipeline grid --config configs/grid.yaml` | [docs/grid.md](docs/grid.md) |
 
+> **效果差(尤其户外)?** 先跑 `python -m pipeline grid -c configs/grid.yaml --colmap-only` 看 COLMAP
+> **注册率** —— 常常是重建失败了(没几张图注册进去)、不是训练问题。见 [docs/grid.md](docs/grid.md)。
+
 ## 指标
 
 ```bash
